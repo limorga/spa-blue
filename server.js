@@ -9,6 +9,11 @@ var path = require('path');
 var async = require('async');
 var socketio = require('socket.io');
 var express = require('express');
+var fs = require('fs');
+
+
+var solc = require('solc');
+var Web3 = require('web3');
 
 //
 // ## SimpleServer `SimpleServer(obj)`
@@ -24,6 +29,9 @@ router.use(express.static(path.resolve(__dirname, 'client')));
 var coins = [];
 var messages = [];
 var sockets = [];
+
+
+var web3;
 
 io.on('connection', function (socket) {
     coins.forEach(function (data) {
@@ -69,9 +77,10 @@ io.on('connection', function (socket) {
          console.log("newCoin event, coin data: ", coin);
          
          var templateContract = readContractTemplate();
-         var newContractCode = customizeContract(templateContract, coin.name, coin.symbol, coin.supply, coin.decimal);
+         var myContractCode = customizeContract(templateContract, coin.name, coin.symbol, coin.supply, coin.decimal);
+         var myCompiledContract = compileContract(myContractCode);
          
-         coin.contract = newContractCode;
+         coin.contract = myCompiledContract;
          coins.push(coin);
          
          socket.emit('newCoin', coin);
@@ -109,12 +118,7 @@ function customizeContract(templateContract, tokenName, tokenSymbol, tokenTotalS
   
   console.log("customizeContract");
   
-  compileContractTest();
-  
   var contractName = removeWhiteSpace(tokenName);
-  
-  //console.log("contractName is:" , contractName);
-
   var newContract = templateContract;
   
   newContract = newContract.replace("<MY_TOKEN_NAME>", tokenName);
@@ -123,9 +127,7 @@ function customizeContract(templateContract, tokenName, tokenSymbol, tokenTotalS
   newContract = newContract.replace("<MY_DECIMAL_PLACES>", tokenDecimalPlaces);
   newContract = newContract.replace("<MY_TOKEN_CONTRACT_NAME>", contractName);
   newContract = newContract.replace("<MY_TOKEN_CONTRACT_NAME>", contractName);
-  
-  //console.log("newContract is:" , newContract);
-  
+    
   return newContract;
 }
 
@@ -135,49 +137,51 @@ function removeWhiteSpace(str) {
 }
 
 function readContractTemplate() {
-  
-  var fs = require('fs');
   return templateContract = fs.readFileSync('contract_template.sol', 'utf8');
-  
 }
 
+function readERC20Contract() {
+  return templateContract = fs.readFileSync('ERC20.sol', 'utf8');  
+}
 
-
-function compileContractTest() {
-
-  console.log("LIMOR1");
-  var solc = require('solc');
-  console.log("LIMOR2");
-
-  var input = "contract x { function g() {} }";
-  var output = solc.compile(input, 1); // 1 activates the optimiser
-  
-    console.log("LIMOR3, output: ", output);
-
-  for (var contractName in output.contracts) {
-      // code and ABI that are needed by web3
-      console.log("LIMOR4", contractName + ': ' + output.contracts[contractName].bytecode);
-      console.log("LIMOR5", contractName + '; ' + JSON.parse( output.contracts[contractName].interface));
+function validateWeb3() {
+  if (typeof web3 !== 'undefined') {
+    web3 = new Web3(web3.currentProvider);
+  } else {
+    // set the provider you want from Web3.providers
+    web3 = new Web3(new Web3.providers.HttpProvider("wss://mainnet.infura.io/ws"));
   }
-
 }
 
 function compileContract(contractCode) {
-  console.log("111");
+
+  var ERC20Contract = readERC20Contract();
+
+  var input = {
+    'ERC20.sol': ERC20Contract,
+    'my_contract.sol': contractCode 
+  }
+
+  var output = solc.compile({ sources: input }, 1); // 1 activates the optimiser
   
-  const fs = require("fs");
-  console.log("222");
-  const solc = require('solc');
-  console.log("333");
-  let Web3 = require('web3');
-  console.log("444");
+  // find the user contract name which is: 'my_contract.sol:<user-token-name>'
+  var myCompiledContractName;
+  for (var contractName in output.contracts) {
+    if(contractName.startsWith('my_contract')) {
+      myCompiledContractName = contractName;
+    }
+  }
   
-  let web3 = new Web3();
-  web3.setProvider(new web3.providers.HttpProvider('http://localhost:8545'));
-  
-  
-  let compiledContract = solc.compile(contractCode, 1);
-  
-  console.log("222");
+  // retrieving the compiled contract from the array of all contracts
+  var myCompiledContract = output.contracts[myCompiledContractName];
+  return myCompiledContract;
+
+  //const bytecode = myCompiledContract.bytecode;
+  //const abi = JSON.parse(myCompiledContract.interface);
+
+  //validateWeb3();
+  //let gasEstimate = web3.eth.estimateGas({data: bytecode});
+  //let myContract = web3.eth.Contract(abi);
+
+  //console.log("END.....");
 }
-  
