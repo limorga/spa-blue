@@ -33,10 +33,6 @@ var sockets = [];
 var web3;
 
 io.on('connection', function (socket) {
-    coins.forEach(function (data) {
-      socket.emit('newCoin', data);
-    });
-
     sockets.push(socket);
 
     socket.on('disconnect', function () {

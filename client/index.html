@@ -20,14 +20,16 @@
         // Checking if Web3 has been injected by the browser (Mist/MetaMask)
         if (typeof web3 !== 'undefined') {
           // Use Mist/MetaMask's provider
+          console.log("web3", web3);
           $scope.web3js = new Web3(web3.currentProvider);
+          console.log("$scope.web3js", $scope.web3js);
           $scope.userAccount = $scope.web3js.eth.accounts[0];
-          console.log($scope.userAccount);
+          console.log("User account: ", $scope.userAccount);
           var accountInterval = setInterval(function () {
             // Check if account has changed
             if ($scope.web3js.eth.accounts[0] !== $scope.userAccount) {
               $scope.userAccount = $scope.web3js.eth.accounts[0];
-              console.log($scope.userAccount);
+              console.log("User account has changed: ", $scope.userAccount);
             }
           }, 100);
         } else {
@@ -63,10 +65,12 @@
       socket.on('newCoin', function (coin) {
         console.log("socket.on(newCoin): ", coin);
         $scope.deployContract(coin.contract);
+        // Add indication the the contract is deployed and number of confirmations
+        $scope.coins.push(coin);
+        $scope.$apply();
       });
 
-      socket.on('roster', function (names) {
-        console.log("socket.on(roster)");
+      socket.on('roster', function (names) {  
         $scope.roster = names;
         $scope.$apply();
       });
@@ -82,9 +86,8 @@
           name: $scope.coinName,
           symbol: $scope.coinSymbol,
           decimal: $scope.coinDecimal,
-          supply: $scope.coinSupply,
-          contract: ''        
-};
+          supply: $scope.coinSupply       
+        };
         console.log('Creating coin:', coin);
         socket.emit('newCoin', coin);
       };
@@ -98,33 +101,74 @@
         const bytecode = compiledContract.bytecode;
         const abi = JSON.parse(compiledContract.interface);
         const contract = $scope.web3js.eth.contract(abi);
+        
+        var contractForTesting = contract.at("0xd6d15dd29e5a8d40c1fef1d5fdcd8b8c433d3b41");
+        $scope.testContract(contractForTesting);
+        return;
 
         // Deploy contract instance
         const contractInstance = contract.new({
           data: '0x' + bytecode,
           from: $scope.userAccount,
-          gas: 90000 * 2
+          gas: 900000 * 2
         }, (err, res) => {
           if (err) {
-            console.log(err);
+            console.log("Failed to create transaction: ", err);
             return;
           }
 
-          // Log the tx, you can explore status with eth.getTransaction()
-          console.log(res.transactionHash);
+          $scope.web3js.eth.getTransaction(res.transactionHash
+            , (err, tx) => {
+              if (tx.blockNumber == null) {
+                console.log("Transaction hash", res.transactionHash, "is pending a block")
+                return;
+              }
+              console.log("Transaction hash", res.transactionHash, "is included in block", tx.blockNumber);
+            });
 
           // If we have an address property, the contract was deployed
           if (res.address) {
-            console.log('Contract address: ' + res.address);
+            console.log("Contract deployed successfully to address", res.address);
+            // For testing purpose, get deployed contract
+            const deployedContract = contract.at(res.address);
+            $scope.testContract(deployedContract);
+          } else {
+            console.log("Contract is being deployed... ");
           }
-
-          // For testing purpose, get deployed contract
-          const deployedContract = contract.at(res.address);
-
-          $scope.coins.push(coin);
-          $scope.$apply();
-        });
+        
+          
+        });  
       }
+
+      $scope.testContract = function testContract(contract) {
+        console.log("Contract for testing", contract);
+        
+        // print balance
+        contract.balanceOf.call($scope.userAccount, (error, result) => {
+          console.log("Your balace is", result.toNumber());
+        });
+
+        contract.balanceOf.call("0x81e0A6434Ae5a1E539bAfC9534aC4417AbD1f232", (error, result) => {
+          console.log("Limor's balace is", result.toNumber());
+        });
+
+        // Limor wants to steal all the balance from Omri
+        contract.transfer.sendTransaction("0x81e0A6434Ae5a1E539bAfC9534aC4417AbD1f232", 20, {
+          from: $scope.userAccoount,
+          gas: 900000 * 2
+        }, (err, res) => {
+          if (err) {
+            console.log("send has failed", err);
+            return;
+          }
+          console.log("send has succeeded", res);
+        });
+
+        // Now Omri has less money :(
+          contract.balanceOf.call($scope.userAccount, (error, result) => {
+          console.log("Your balace is", result.toNumber());
+        });
+      }  
     }
   </script>
 </head>
@@ -219,7 +263,7 @@
             <tr ng-repeat="coin in coins">
               <td class="span2">
                 <span ng-bind="coin.name"></span>
-                <pre class="pre-scrollable"><code ng-bind="coin.contract.interface"></code></pre>
+                <pre class="pre-scrollable"><code ng-bind="coin.contract.sourceCode"></code></pre>
               </td>
             </tr>
           </tbody>
