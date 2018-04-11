@@ -79,6 +79,7 @@ io.on('connection', function (socket) {
          var myContractCode = customizeContract(templateContract, coin.name, coin.symbol, coin.supply, coin.decimal);
          var myCompiledContract = compileContract(myContractCode);
          
+         myCompiledContract.sourceCode = myContractCode;
          coin.contract = myCompiledContract;
          coins.push(coin);
          
