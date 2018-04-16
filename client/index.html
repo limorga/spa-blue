@@ -1,280 +1,56 @@
 <!doctype html>
-<html lang="en" ng-app>
+
 
 <head>
-  <title>Chat Example</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="/css/bootstrap.min.css">
-  <link rel="stylesheet" href="/css/bootstrap-responsive.min.css">
-  <style>
-    body {
-      padding-top: 60px;
-    }
-  </style>
-  <script language=“javascript” type=“text/javascript” src=“web3.min.js”></script>
-  <script>
-    function ChatController($scope) {
-      var socket = io.connect();
-
-      window.addEventListener('load', function () {
-        // Checking if Web3 has been injected by the browser (Mist/MetaMask)
-        if (typeof web3 !== 'undefined') {
-          // Use Mist/MetaMask's provider
-          console.log("web3", web3);
-          $scope.web3js = new Web3(web3.currentProvider);
-          console.log("$scope.web3js", $scope.web3js);
-          $scope.userAccount = $scope.web3js.eth.accounts[0];
-          console.log("User account: ", $scope.userAccount);
-          var accountInterval = setInterval(function () {
-            // Check if account has changed
-            if ($scope.web3js.eth.accounts[0] !== $scope.userAccount) {
-              $scope.userAccount = $scope.web3js.eth.accounts[0];
-              console.log("User account has changed: ", $scope.userAccount);
-            }
-          }, 100);
-        } else {
-          // Handle the case where the user doesn't have web3. Probably 
-          // show them a message telling them to install Metamask in 
-          // order to use our app.
-        }
-      })
-
-      $scope.messages = [];
-      $scope.coins = [];
-      $scope.roster = [];
-      $scope.name = '';
-      $scope.text = '';
-
-      // Default values for input fields - for testing only
-      $scope.coinName = "OlmertCoin";
-      $scope.coinSymbol = "OLMRT";
-      $scope.coinDecimal = "3";
-      $scope.coinSupply = "60000";
-
-      socket.on('connect', function () {
-        console.log("socket.on(connect)");
-        $scope.setName();
-      });
-
-      socket.on('message', function (msg) {
-        console.log("socket.on(message): ", msg);
-        $scope.messages.push(msg);
-        $scope.$apply();
-      });
-
-      socket.on('newCoin', function (coin) {
-        console.log("socket.on(newCoin): ", coin);
-        $scope.deployContract(coin.contract);
-        // Add indication the the contract is deployed and number of confirmations
-        $scope.coins.push(coin);
-        $scope.$apply();
-      });
-
-      socket.on('roster', function (names) {  
-        $scope.roster = names;
-        $scope.$apply();
-      });
-
-      $scope.send = function send() {
-        console.log('Sending message:', $scope.text);
-        socket.emit('message', $scope.text);
-        $scope.text = '';
-      };
-
-      $scope.createCoin = function createCoin() {
-        var coin = {
-          name: $scope.coinName,
-          symbol: $scope.coinSymbol,
-          decimal: $scope.coinDecimal,
-          supply: $scope.coinSupply       
-        };
-        console.log('Creating coin:', coin);
-        socket.emit('newCoin', coin);
-      };
-
-      $scope.setName = function setName() {
-        socket.emit('identify', $scope.name);
-      };
-
-      $scope.deployContract = function deployContract(compiledContract) {
-        // Create contract Object
-        const bytecode = compiledContract.bytecode;
-        const abi = JSON.parse(compiledContract.interface);
-        const contract = $scope.web3js.eth.contract(abi);
-        
-        var contractForTesting = contract.at("0xd6d15dd29e5a8d40c1fef1d5fdcd8b8c433d3b41");
-        $scope.testContract(contractForTesting);
-        return;
-
-        // Deploy contract instance
-        const contractInstance = contract.new({
-          data: '0x' + bytecode,
-          from: $scope.userAccount,
-          gas: 900000 * 2
-        }, (err, res) => {
-          if (err) {
-            console.log("Failed to create transaction: ", err);
-            return;
-          }
-
-          $scope.web3js.eth.getTransaction(res.transactionHash
-            , (err, tx) => {
-              if (tx.blockNumber == null) {
-                console.log("Transaction hash", res.transactionHash, "is pending a block")
-                return;
-              }
-              console.log("Transaction hash", res.transactionHash, "is included in block", tx.blockNumber);
-            });
-
-          // If we have an address property, the contract was deployed
-          if (res.address) {
-            console.log("Contract deployed successfully to address", res.address);
-            // For testing purpose, get deployed contract
-            const deployedContract = contract.at(res.address);
-            $scope.testContract(deployedContract);
-          } else {
-            console.log("Contract is being deployed... ");
-          }
-        
-          
-        });  
-      }
-
-      $scope.testContract = function testContract(contract) {
-        console.log("Contract for testing", contract);
-        
-        // print balance
-        contract.balanceOf.call($scope.userAccount, (error, result) => {
-          console.log("Your balace is", result.toNumber());
-        });
-
-        contract.balanceOf.call("0x81e0A6434Ae5a1E539bAfC9534aC4417AbD1f232", (error, result) => {
-          console.log("Limor's balace is", result.toNumber());
-        });
-
-        // Limor wants to steal all the balance from Omri
-        contract.transfer.sendTransaction("0x81e0A6434Ae5a1E539bAfC9534aC4417AbD1f232", 20, {
-          from: $scope.userAccoount,
-          gas: 900000 * 2
-        }, (err, res) => {
-          if (err) {
-            console.log("send has failed", err);
-            return;
-          }
-          console.log("send has succeeded", res);
-        });
-
-        // Now Omri has less money :(
-          contract.balanceOf.call($scope.userAccount, (error, result) => {
-          console.log("Your balace is", result.toNumber());
-        });
-      }  
-    }
-  </script>
+  <link href='https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Material+Icons' rel="stylesheet">
+  <link href="https://unpkg.com/vuetify/dist/vuetify.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
 </head>
 
+
 <body>
-  <div class="container" ng-controller="ChatController">
-    <div class="navbar navbar-fixed-top navbar-inverse">
-      <div class="navbar-inner">
-        <div class="pull-right">
-          <a href="https://google.com" class="brand">CryptoBasics</a>
-        </div>
-      </div>
-    </div>
-    <div class="page-header">
-      <h2>Let's create some new crypto coins!</h2>
-    </div>
-    <div class="row">
-      <!--<div class="span3">-->
-      <!--  <ul class="nav nav-list well">-->
-      <!--    <li class="nav-header">Local Users</li>-->
-      <!--    <li ng-repeat="user in roster" ng-bind="user">-->
-      <!--    </li>-->
-      <!--  </ul>-->
-      <!--</div>-->
-      <div class="span7">
-        <p>You're almost there...
-          <br>Please tell us some basic information about your coin:</p>
-      </div>
-      <div class="span7">
-        <!--<table class="table table-striped table-bordered">-->
-        <!--  <thead>-->
-        <!--    <tr>-->
-        <!--      <th class="span2">Name</th>-->
-        <!--      <th class="span7">Text</th>-->
-        <!--    </tr>-->
-        <!--  </thead>-->
-        <!--  <tbody>-->
-        <!--    <tr ng-repeat="msg in messages">-->
-        <!--      <td class="span2" ng-bind="msg.name"></td>-->
-        <!--      <td class="span7" ng-bind="msg.text"></td>-->
-        <!--    </tr>-->
-        <!--  </tbody>-->
-        <!--</table>-->
-        <!--<div class="row controls">-->
-        <!--  <form ng-submit="send()">-->
-        <!--    <div class="span2"><input type="text" class="input-block-level" ng-model="name" ng-change="setName()" placeholder="Your Name"></div>-->
-        <!--    <div class="input-append span7">-->
-        <!--      <input type="text" class="span6" ng-model="text" placeholder="Message">-->
-        <!--      <input type="submit" class="span1 btn btn-primary" value="Send" ng-disabled="!text">-->
-        <!--    </div>-->
-        <!--  </form>-->
-        <!--</div>-->
-        <div class="row controls">
-          <form ng-submit="createCoin()">
-            <div class="span3">
-              <b>Name:</b>
-            </div>
-            <div class="span5">
-              <input type="text" class="input-block-level" ng-model="coinName" placeholder="What would be the name of your coin? (e.g. Bitcoin)">
-            </div>
-            <div class="span3">
-              <b>Symbol:</b>
-            </div>
-            <div class="span5">
-              <input type="text" class="input-block-level" ng-model="coinSymbol" placeholder="What would be the symbol of your coin? (e.g. BTC)">
-            </div>
-            <div class="span3">
-              <b>Decimal places:</b>
-            </div>
-            <div class="span5">
-              <input type="text" class="input-block-level" ng-model="coinDecimal" placeholder="What would be the smallest amount of coins to transfer? (e.g. 0.001)">
-            </div>
-            <div class="span3">
-              <b>Total Supply:</b>
-            </div>
-            <div class="span5">
-              <input type="text" class="input-block-level" ng-model="coinSupply" placeholder="How many coins would be in circulation in total? (e.g. 21,000,000)">
-            </div>
-            <!--name,symbol,decimal places, supply (number of coins in circulation)-->
-            <div class="input-append span7">
-              <input type="submit" class="span2 btn btn-primary" value="Let's Go" ng-disabled="!coinName">
-            </div>
-          </form>
-        </div>
-        <table class="table table-striped table-bordered">
-          <thead>
-            <tr>
-              <th class="span2">Contract</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr ng-repeat="coin in coins">
-              <td class="span2">
-                <span ng-bind="coin.name"></span>
-                <pre class="pre-scrollable"><code ng-bind="coin.contract.sourceCode"></code></pre>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+
+  <div id="app">
+    <v-app>
+      <v-toolbar app class="white" flat >
+        <v-avatar>
+          <img src="img/logo.png">
+        </v-avatar>
+        <v-toolbar-title class="yellow--text text--darken-1">BARYA</v-toolbar-title>
+        <v-spacer></v-spacer>
+        <v-toolbar-items class="hidden-sm-and-down">
+          <v-btn class="blue-grey--text text--darken-2" flat >New Coin</v-btn>
+          <v-btn class="blue-grey--text text--darken-2" flat>My Coins</v-btn>
+          <v-btn class="blue-grey--text text--darken-2" flat>Blog</v-btn>
+          <v-btn class="blue-grey--text text--darken-2" flat>Login</v-btn>
+        </v-toolbar-items>
+      </v-toolbar>
+
+
+      <v-content class="white">
+        <v-container fluid>
+          <!-- <router-view></router-view> -->
+        </v-container>
+      </v-content>
+      <v-footer app></v-footer>
+    </v-app>
   </div>
+
+
+  <script src="/js/vue.js"></script>
+  <script src="/js/vuetify.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/jquery.min.js"></script>
-  <script src="/js/bootstrap.min.js"></script>
-  <script src="/js/angular.min.js"></script>
+  <script src="/js/app.js"></script>
 </body>
+
+
+
+
+
+
+
+
+
 
 </html>
